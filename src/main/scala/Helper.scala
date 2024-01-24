@@ -12,7 +12,7 @@ object SV39{
   def PageSize= 1 << PageBits
   def PageElem = 512
   def VALowerCeil = BigInt("0000004000000000", 16)
-  def VAUpperFloor = BigInt("ffffffc000000000", 16)
+  def VAUpperFloor = BigInt("0ffffffc000000000", 16)
   def PageLevels: Int = 3
   def V = 1
   def R = 2

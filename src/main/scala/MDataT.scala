@@ -7,12 +7,12 @@ abstract class MDataT(size: Int) {
   def toBigInt = Helper.ByteArray2BigInt(data)
   def apply() = data
   def apply(ba: Array[Byte]) = {data = ba.take(size)}
+  def getLength = data.length
 }
 
 object MDataT{
   def fromBigInt[T <: MDataT](n: BigInt): T = {
-    def create(): T
-    val y = create()
+    val y = new T
     y.data = Helper.BigInt2ByteArray(n, y().length)
     y
   }
