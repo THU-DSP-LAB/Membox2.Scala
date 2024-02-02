@@ -18,6 +18,18 @@ object MDataT{
   }
 }
 
-class Int32 extends MDataT(4)
+class Int32 extends MDataT(Int32.size)
+object Int32{
+  val size = 4
+  def apply(x: BigInt): Int32 = {
+    MDataT.fromBigInt[Int32](x)
+  }
+}
 
-class Int64 extends MDataT(8)
+class Int64 extends MDataT(Int64.size)
+object Int64{
+  val size = 8
+  def apply(x: BigInt): Int64 = {
+    MDataT.fromBigInt[Int64](x)
+  }
+}

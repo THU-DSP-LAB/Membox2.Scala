@@ -117,4 +117,15 @@ class PhysicalMemory(range: BigInt) {
       (f, res2)
     }
   }
+
+  def findUsable(size: Int): (Boolean, BigInt) = {
+    val realsize = (size + SV39.PageSize - 1) / SV39.PageSize * SV39.PageSize
+    val elem = (blocks.dropRight(1) zip blocks.drop(1)).find( b => {
+      b._2.addr - b._1.end >= realsize
+    })
+    elem match {
+      case Some(ptr) => (true, ptr._1.end)
+      case None => (false, BigInt(0))
+    }
+  }
 }
