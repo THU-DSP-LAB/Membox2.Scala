@@ -7,6 +7,7 @@ object Helper {
 }
 
 abstract class BaseSV{
+  type WORD <: MDataT
   def VALowerCeil: BigInt
   def VAUpperFloor: BigInt
   def PageBits = 12
@@ -20,13 +21,16 @@ abstract class BaseSV{
   def A = 64
   def D = 128
   def PageElem
+
   def PageLevels: Int
   def VAExtract(VA: BigInt, level: Int): BigInt
+  def getVPN(VA: BigInt): BigInt
   def VACheck(VA: BigInt): Boolean = VA >= VALowerCeil && VA < VAUpperFloor
   def PTEToPA(PTE: BigInt): BigInt
   def SetPTE(PA: BigInt, mods: BigInt): BigInt
 }
 object SV32 extends BaseSV{
+  override type WORD = Int32
   def MaxPhyRange = BigInt("100000000", 16)
   def PageElem = 1024
   def VALowerCeil = BigInt("07fffffff", 16)
@@ -39,11 +43,13 @@ object SV32 extends BaseSV{
       case _ => (VA >> 12) & 0x3ff
     }
   }
+  def getVPN(VA: BigInt) = (VA >> 12) & 0xfffff
   def PTEToPA(PTE: BigInt) = (PTE & BigInt("0fffffc00", 16)) << 2
   def SetPTE(PA: BigInt, mods: BigInt) = ((PA & BigInt("0fffff000", 16)) >> 2) | mods
 }
 
 object SV39 extends BaseSV{
+  override type WORD = Int64
   def MaxPhyRange = BigInt("0100000000000000", 16)
   def PageElem = 512
   def VALowerCeil = BigInt("0000004000000000", 16)
@@ -56,6 +62,7 @@ object SV39 extends BaseSV{
       case _ => (VA >> 12) & 0x1ff
     }
   }
+  def getVPN(VA: BigInt) = (VA >> 12) & 0x7ffffff
   def PTEToPA(PTE: BigInt) = (PTE & BigInt("003ffffffffffc00", 16)) << 2
   def SetPTE(PA: BigInt, mods: BigInt) = ((PA & BigInt("00fffffffffff000", 16)) >> 2) | mods
 }

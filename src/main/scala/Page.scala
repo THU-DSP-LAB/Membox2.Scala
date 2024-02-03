@@ -85,7 +85,7 @@ class PhysicalMemory(range: BigInt) {
     }
     else {
       (0 until num).filter(mask(_)).map { i =>
-        writeWord(addr + i * in(i).getLength, in(i))
+        writeWord(addr + i * in(i).size, in(i))
       }.reduceLeft(_ && _)
     }
   }
@@ -100,13 +100,13 @@ class PhysicalMemory(range: BigInt) {
 
   def readWord[T <: MDataT](addr: BigInt): (Boolean, T) = {
     val word = new T
-    val (f, d) = readData(addr, word.getLength)
+    val (f, d) = readData(addr, word.size)
     word.data = d
     (f, word)
   }
 
   def readWords[T <: MDataT](addr: BigInt, num: Int, mask: Array[Boolean] = Array.empty): (Boolean, Array[T]) = {
-    val length = (new T).getLength
+    val length = (new T).size
     val res = (0 until num).map{ i => readWord(addr + i * length)}.unzip[Boolean, T]
     if(mask.isEmpty){
       (res._1.reduceLeft(_ && _), res._2.toArray)
