@@ -7,7 +7,7 @@ object Helper {
 }
 
 abstract class BaseSV{
-  type WORD <: MDataT
+  def gen(x: BigInt): CustomInt
   def VALowerCeil: BigInt
   def VAUpperFloor: BigInt
   def PageBits = 12
@@ -20,7 +20,7 @@ abstract class BaseSV{
   def G = 32
   def A = 64
   def D = 128
-  def PageElem
+  def PageElem: Int
 
   def PageLevels: Int
   def VAExtract(VA: BigInt, level: Int): BigInt
@@ -30,7 +30,7 @@ abstract class BaseSV{
   def SetPTE(PA: BigInt, mods: BigInt): BigInt
 }
 object SV32 extends BaseSV{
-  override type WORD = Int32
+  override def gen(x: BigInt) = new Int32(x)
   def MaxPhyRange = BigInt("100000000", 16)
   def PageElem = 1024
   def VALowerCeil = BigInt("07fffffff", 16)
@@ -49,7 +49,7 @@ object SV32 extends BaseSV{
 }
 
 object SV39 extends BaseSV{
-  override type WORD = Int64
+  override def gen(x: BigInt) = new Int64(x)
   def MaxPhyRange = BigInt("0100000000000000", 16)
   def PageElem = 512
   def VALowerCeil = BigInt("0000004000000000", 16)

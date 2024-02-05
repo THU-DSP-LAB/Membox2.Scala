@@ -36,12 +36,12 @@ object Block{
   def apply(addr: BigInt, size: Int, create_pages: Boolean = true) = new Block(addr, size, create_pages)
 }
 
-class PhysicalMemory(range: BigInt) {
+class PhysicalMemory(range: BigInt, val SV: BaseSV) {
   var maxRange: BigInt = {
     val x = (range min SV39.MaxPhyRange)
-    (x + SV39.PageSize - 1) / SV39.PageSize * SV39.PageSize
+    (x + SV.PageSize - 1) / SV.PageSize * SV.PageSize
   }
-  var blocks: ArrayBuffer[Block] = ArrayBuffer(Block(0, SV39.PageSize, false), Block(maxRange, SV39.PageSize, false))
+  var blocks: ArrayBuffer[Block] = ArrayBuffer(Block(0, SV.PageSize, false), Block(maxRange, SV.PageSize, false))
 
   def insertBlock(blk: Block): Boolean = {
     val pos = blocks.lastIndexWhere(_ < blk)
@@ -62,23 +62,23 @@ class PhysicalMemory(range: BigInt) {
     }
   }
 
-  def writeData(addr: BigInt, length: Int, data: Array[Byte]): Boolean = {
+  def writeData(addr: BigInt, length: Int, in: Array[Byte]): Boolean = {
     val elem = blocks.find(b => addr >= b.addr && addr + length <= b.end)
     elem match {
       case Some(b) => {
-        b.write((addr - b.addr).toInt, length, data)
+        b.write((addr - b.addr).toInt, length, in)
         true
       }
       case None => false
     }
   }
 
-  def writeWord[T <: MDataT](addr: BigInt, in: T): Boolean = {
+  def writeWord[T <: CustomInt](addr: BigInt, in: T): Boolean = {
     val dat = in.data
     writeData(addr, dat.length, dat)
   }
 
-  def writeWords[T <: MDataT](addr: BigInt, num: Int, in: Array[T], mask: Array[Boolean] = Array.empty): Boolean = {
+  def writeWords[T <: CustomInt](addr: BigInt, num: Int, in: Array[T], mask: Array[Boolean] = Array.empty): Boolean = {
     val dat = in.map(_.data).reduceLeft((l, r) => l ++ r)
     if (mask.isEmpty) {
       writeData(addr, num * dat.length, dat)
@@ -98,28 +98,28 @@ class PhysicalMemory(range: BigInt) {
     }
   }
 
-  def readWord[T <: MDataT](addr: BigInt): (Boolean, T) = {
-    val word = new T
+  def readWord[T <: CustomInt](addr: BigInt)(implicit fct: BigInt => T): (Boolean, T) = {
+    val word = fct(0)
     val (f, d) = readData(addr, word.size)
     word.data = d
     (f, word)
   }
 
-  def readWords[T <: MDataT](addr: BigInt, num: Int, mask: Array[Boolean] = Array.empty): (Boolean, Array[T]) = {
-    val length = (new T).size
-    val res = (0 until num).map{ i => readWord(addr + i * length)}.unzip[Boolean, T]
+  def readWords[T <: CustomInt](addr: BigInt, num: Int, mask: Array[Boolean] = Array.empty)(implicit fct: BigInt => T): (Boolean, IndexedSeq[T]) = {
+    val length = fct(0).size
+    val res = (0 until num).map{ i => readWord(addr + i * length)}.unzip
     if(mask.isEmpty){
-      (res._1.reduceLeft(_ && _), res._2.toArray)
+      (res._1.reduceLeft(_ && _), res._2)
     }
     else{
       val f = (res._1 zip mask).map(c => c._1 || !c._2).reduceLeft(_ && _)
-      val res2 = (res._2 zip mask).map(c => {if(c._2) c._1 else MDataT.fromBigInt[T](0)}).toArray
+      val res2 = (res._2 zip mask).map(c => { if(c._2) c._1 else fct(BigInt(0)) })
       (f, res2)
     }
   }
 
   def findUsable(size: Int): (Boolean, BigInt) = {
-    val realsize = (size + SV39.PageSize - 1) / SV39.PageSize * SV39.PageSize
+    val realsize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
     val elem = (blocks.dropRight(1) zip blocks.drop(1)).find( b => {
       b._2.addr - b._1.end >= realsize
     })

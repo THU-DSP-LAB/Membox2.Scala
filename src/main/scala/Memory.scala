@@ -1,7 +1,12 @@
 package MemboxS
 
+import scala.language.implicitConversions
+
 class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
-  val pmm = new PhysicalMemory(max_range)
+  implicit def fct(x: BigInt): CustomInt = SV.gen(x)
+  val wordSize = fct(0).size
+
+  val pmm = new PhysicalMemory(max_range, SV)
 
   def createRootPageTable(): BigInt = {
     val (flag, root) = pmm.findUsable(SV.PageSize)
@@ -11,7 +16,6 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
   }
 
   def allocateMemory(root: BigInt, vaddr: BigInt, size: Int): BigInt = {
-    val wordSize = (new SV.WORD).size
     val realsize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
     val (flag, paddr) = pmm.findUsable(realsize)
     if(!flag || pmm.insertBlock(new Block(paddr, size, true)))
@@ -26,11 +30,11 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
         if(SV.VAExtract(vaddr + pos, level) != pt_idx(level)){
           pt_idx(level) = SV.VAExtract(vaddr + pos, level).toInt
           // entry not exist in PT
-          if((pmm.readWord[SV.WORD](pt_addr(level) + pt_idx(level) * wordSize)._2.toBigInt & BigInt(SV.V))== 0) {
+          if((pmm.readWord(pt_addr(level) + pt_idx(level) * wordSize)._2.toBigInt & BigInt(SV.V))== 0) {
             level match {
-              case (SV.PageLevels - 1) => {
+              case l if (l == SV.PageLevels - 1) => {
                 val pt_entry_tmp = SV.SetPTE(paddr + pos, SV.R|SV.W|SV.X|SV.V)
-                pmm.writeWord[SV.WORD](root + pt_idx(level) * wordSize, new SV.WORD(pt_entry_tmp))
+                pmm.writeWord(root + pt_idx(level) * wordSize, fct(pt_entry_tmp))
               }
               case _ => {
                 val pt_addr_tmp = pmm.findUsable(SV.PageSize)
@@ -38,13 +42,13 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
                 // create and insert PT
                 pmm.insertBlock(new Block(pt_addr_tmp._2, SV.PageSize, true))
                 val pt_entry_tmp = SV.SetPTE(pt_addr_tmp._2, SV.V)
-                pmm.writeWord[SV.WORD](root + pt_idx(level) * wordSize, new SV.WORD(pt_entry_tmp))
+                pmm.writeWord(root + pt_idx(level) * wordSize, fct(pt_entry_tmp))
               }
             }
           }
         }
         if(level < SV.PageLevels - 1)
-          pt_addr(level + 1) = SV.PTEToPA(pmm.readWord[SV.WORD](pt_addr(level) + pt_idx(level) * wordSize)._2.toBigInt)
+          pt_addr(level + 1) = SV.PTEToPA(pmm.readWord(pt_addr(level) + pt_idx(level) * wordSize)._2.toBigInt)
       }
 
       pos += SV.PageSize
@@ -52,10 +56,9 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     return paddr
   }
   def addrConvert(root: BigInt, vaddr: BigInt): BigInt = {
-    val wordSize = (new SV.WORD).size
     var pt_addr = root
     for(level <- 0 until SV.PageLevels){
-      val tmp = SV.PTEToPA(pmm.readWord[SV.WORD](pt_addr + SV.VAExtract(vaddr, level)*wordSize)._2.toBigInt)
+      val tmp = SV.PTEToPA(pmm.readWord(pt_addr + SV.VAExtract(vaddr, level) * wordSize)._2.toBigInt)
       if(tmp == 0) return 0
       pt_addr = tmp
     }
@@ -68,7 +71,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     for(it <- 0 until size){
       if(vpn != SV.getVPN(vaddr + it)){
         if(len > 0){
-          out = out :+ pmm.readData(paddr, len)._2
+          out = out ++ pmm.readData(paddr, len)._2
           paddr = addrConvert(root, vaddr + it)
         }
         len = 0
@@ -77,11 +80,56 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
       if(paddr == 0) return (false, Array.empty)
       len += 1
     }
-    out = out :+ pmm.readData(paddr, len)._2
+    out = out ++ pmm.readData(paddr, len)._2
     return (true, out)
   }
-  def readDataPhysical(paddr: BigInt, length: Int): (Boolean, Array[Byte]) = {
-    pmm.readData(paddr, length)
+  def readDataPhysical(paddr: BigInt, size: Int): (Boolean, Array[Byte]) = {
+    pmm.readData(paddr, size)
   }
+  def readWordPhysical(paddr: BigInt) = pmm.readWord(paddr)
+  def readWordsPhysical(paddr: BigInt, num: Int, mask: Array[Boolean]) = pmm.readWords(paddr, num, mask)
+  def writeDataVirtual(root: BigInt, vaddr: BigInt, size: Int, in: Array[Byte]): Boolean = {
+    var vpn: BigInt = 0; var len: Int = 0
+    var paddr = addrConvert(root, vaddr)
+    for(it <- 0 until size){
+      if(vpn != SV.getVPN(vaddr + it)){
+        if(len > 0){
+          pmm.writeData(paddr, len, in.slice(it - len, it))
+          paddr = addrConvert(root, vaddr + it)
+        }
+        len = 0
+        vpn = SV.getVPN(vaddr + it)
+      }
+      if(paddr == 0) return false
+      len += 1
+    }
+    pmm.writeData(paddr, len, in.slice(size - len, size))
+    true
+  }
+  def writeDataPhysical(paddr: BigInt, size: Int, in: Array[Byte]): Boolean = pmm.writeData(paddr, size, in)
+  def writeWordPhysical[T1 <: CustomInt](paddr: BigInt, in: T1): Boolean = pmm.writeWord[T1](paddr, in)
+  def writeWordsPhysical[T1 <: CustomInt](paddr: BigInt, num: Int, in: Array[T1], mask: Array[Boolean]): Boolean = pmm.writeWords[T1](paddr, num, in, mask)
+  def releaseMemory(root: BigInt, vaddr: BigInt): Boolean = {
+    var paddr = addrConvert(root, vaddr)
+    val size = pmm.blocks.find(b => b == paddr) match {
+      case Some(b) => b.size
+      case None => 0
+    }
+    if(size == 0) return false
+    pmm.removeBlock(paddr)
 
+    val pt_addr = scala.collection.mutable.Seq.fill(SV.PageLevels)(BigInt(0))
+    pt_addr(0) = root
+    var iter = 0
+    while(iter < size){
+      for(level <- 1 until SV.PageLevels){
+        pt_addr(level) = SV.PTEToPA(pmm.readWord(pt_addr(level - 1) + SV.VAExtract(vaddr, level - 1)*wordSize)._2.toBigInt)
+      }
+      val pt_idx = SV.VAExtract(vaddr + iter, SV.PageLevels - 1)
+      pmm.writeWord(pt_addr(SV.PageLevels - 1) * wordSize, fct(0))
+
+      iter += SV.PageSize
+    }
+    return true
+  }
 }

@@ -4,5 +4,6 @@ ThisBuild / scalaVersion := "2.13.12"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "Membox2.Scala"
+    name := "Membox2.Scala",
+    scalacOptions ++= Seq("-deprecation", "-feature")
   )
