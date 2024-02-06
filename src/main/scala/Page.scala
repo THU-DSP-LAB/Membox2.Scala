@@ -54,7 +54,7 @@ class PhysicalMemory(range: BigInt, val SV: BaseSV) {
   }
 
   def removeBlock(addr: BigInt): Boolean = {
-    val pos = blocks.indexWhere(b => b.addr < addr && b.end > addr)
+    val pos = blocks.indexWhere(b => b == addr)
     if (pos == -1) false
     else {
       blocks.remove(pos)

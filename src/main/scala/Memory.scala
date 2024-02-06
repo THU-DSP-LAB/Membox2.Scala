@@ -18,7 +18,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
   def allocateMemory(root: BigInt, vaddr: BigInt, size: Int): BigInt = {
     val realsize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
     val (flag, paddr) = pmm.findUsable(realsize)
-    if(!flag || pmm.insertBlock(new Block(paddr, size, true)))
+    if(!flag || !pmm.insertBlock(new Block(paddr, size, true)))
       return 0
     var pos: BigInt = 0
     val pt_idx = scala.collection.mutable.Seq.fill[Int](SV.PageLevels)(-1)
@@ -34,7 +34,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
             level match {
               case l if (l == SV.PageLevels - 1) => {
                 val pt_entry_tmp = SV.SetPTE(paddr + pos, SV.R|SV.W|SV.X|SV.V)
-                pmm.writeWord(root + pt_idx(level) * wordSize, fct(pt_entry_tmp))
+                pmm.writeWord(pt_addr(level) + pt_idx(level) * wordSize, fct(pt_entry_tmp))
               }
               case _ => {
                 val pt_addr_tmp = pmm.findUsable(SV.PageSize)
@@ -42,7 +42,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
                 // create and insert PT
                 pmm.insertBlock(new Block(pt_addr_tmp._2, SV.PageSize, true))
                 val pt_entry_tmp = SV.SetPTE(pt_addr_tmp._2, SV.V)
-                pmm.writeWord(root + pt_idx(level) * wordSize, fct(pt_entry_tmp))
+                pmm.writeWord(pt_addr(level) + pt_idx(level) * wordSize, fct(pt_entry_tmp))
               }
             }
           }
@@ -126,10 +126,66 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
         pt_addr(level) = SV.PTEToPA(pmm.readWord(pt_addr(level - 1) + SV.VAExtract(vaddr, level - 1)*wordSize)._2.toBigInt)
       }
       val pt_idx = SV.VAExtract(vaddr + iter, SV.PageLevels - 1)
-      pmm.writeWord(pt_addr(SV.PageLevels - 1) * wordSize, fct(0))
+      pmm.writeWord(pt_addr(SV.PageLevels - 1) + pt_idx * wordSize, fct(0))
 
       iter += SV.PageSize
     }
     return true
+  }
+  def cleanPageTable(root: BigInt): Boolean = {
+    val pt_addr = scala.collection.mutable.Seq.fill(SV.PageLevels)(BigInt(0)); pt_addr(0) = root
+
+    def cleanLevel(level: Int): Boolean = {
+      if(level == SV.PageLevels - 1){
+        val allEmpty = (0 until SV.PageSize by wordSize).map{ x =>
+          (pmm.readWord(pt_addr(level) + x)._2.toBigInt & SV.V) == 0
+        }.reduceLeft(_ && _)
+
+        if(allEmpty){
+          pmm.removeBlock(pt_addr(level))
+          if(level > 0) pmm.writeWord(pt_addr(level - 1), fct(0))
+          return true // Remove
+        }
+        return false // Keep
+      }
+      else{
+        val allEmpty = (0 until SV.PageSize by wordSize).map{ x =>
+          pt_addr(level + 1) = SV.PTEToPA(pmm.readWord(pt_addr(level) + x)._2.toBigInt)
+          // is already invalid, or sucessfully cleaned
+          (pmm.readWord(pt_addr(level) + x)._2.toBigInt & SV.V) == 0 || cleanLevel(level + 1)
+        }.reduceLeft(_ && _)
+        if(allEmpty){
+          pmm.removeBlock(pt_addr(level))
+          if(level > 0) pmm.writeWord(pt_addr(level - 1), fct(0))
+          return true
+        }
+        return false
+      }
+    }
+
+    cleanLevel(0)
+  }
+  def cleanTask(root: BigInt): Boolean = {
+    val pt_addr = scala.collection.mutable.Seq.fill(SV.PageLevels)(BigInt(0)); pt_addr(0) = root
+
+    def cleanLevel(level: Int): Boolean = {
+      if(level == SV.PageLevels - 1){
+        (0 until SV.PageSize by wordSize).map{x =>
+          pmm.readWord(pt_addr(level) + x)._2.toBigInt
+        }.filter(x => (x & SV.V) != 0).foreach(x => pmm.removeBlock(SV.PTEToPA(x)))
+      }
+      else{
+        (0 until SV.PageSize by wordSize).map{ x =>
+          pmm.readWord(pt_addr(level) + x)._2.toBigInt
+        }.filter(x => (x & SV.V) != 0).foreach( p => {
+          pt_addr(level + 1) = SV.PTEToPA(p)
+          cleanLevel(level + 1)
+        })
+      }
+      pmm.removeBlock(pt_addr(level))
+      true
+    }
+
+    cleanLevel(0)
   }
 }
