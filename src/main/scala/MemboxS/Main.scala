@@ -1,5 +1,5 @@
 package MemboxS
-import Helper._
+import MemboxS.Helper._
 
 object SimpleTest extends App{
   val mem = new Memory(SV39.PageSize * 64, SV39)
