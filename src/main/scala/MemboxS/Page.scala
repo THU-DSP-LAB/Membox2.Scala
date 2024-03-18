@@ -19,10 +19,17 @@ class Block(val addr: BigInt, val size: Int, val create_pages: Boolean = true){
   def >(thatAddr: BigInt): Boolean = addr > thatAddr
   def ==(thatAddr: BigInt): Boolean = addr <= thatAddr && end > thatAddr
 
-  def write(base: Int, length: Int, data: Array[Byte]): Boolean = {
+  def write(base: Int, length: Int, data: Array[Byte], mask: Array[Boolean] = Array.empty): Boolean = {
     if(base + length > size) false
-    else{
+    else if(mask.isEmpty){
       pages.data = pages.data.take(base) ++ data.take(length) ++ pages.data.drop(base + length)
+      true
+    }
+    else{
+      pages.data.take(base) ++
+        ((pages.data.slice(base, base+length) zip data.take(length)) zip mask.take(length)).map{ case ((p, d), m) =>
+          if(m) d else p
+        } ++ pages.data.drop(base + length)
       true
     }
   }
@@ -62,11 +69,11 @@ class PhysicalMemory(range: BigInt, val SV: BaseSV) {
     }
   }
 
-  def writeData(addr: BigInt, length: Int, in: Array[Byte]): Boolean = {
+  def writeData(addr: BigInt, length: Int, in: Array[Byte], mask: Array[Boolean] = Array.empty): Boolean = {
     val elem = blocks.find(b => addr >= b.addr && addr + length <= b.end)
     elem match {
       case Some(b) => {
-        b.write((addr - b.addr).toInt, length, in)
+        b.write((addr - b.addr).toInt, length, in, mask)
         true
       }
       case None => false

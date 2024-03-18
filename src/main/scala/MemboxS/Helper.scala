@@ -10,6 +10,7 @@ abstract class BaseSV{
   def gen(x: BigInt): CustomInt
   def VALowerCeil: BigInt
   def VAUpperFloor: BigInt
+  def MaxPhyRange: BigInt
   def PageBits = 12
   def PageSize= 1 << PageBits
   def V = 1
@@ -65,4 +66,20 @@ object SV39 extends BaseSV{
   def getVPN(VA: BigInt) = (VA >> 12) & 0x7ffffff
   def PTEToPA(PTE: BigInt) = (PTE & BigInt("003ffffffffffc00", 16)) << 2
   def SetPTE(PA: BigInt, mods: BigInt) = ((PA & BigInt("00fffffffffff000", 16)) >> 2) | mods
+}
+
+trait Bare extends BaseSV{
+  override def PageElem: Int = 0
+  override def PageLevels: Int = 0
+  override def VAExtract(VA: BigInt, level: Int): BigInt = 0
+  override def getVPN(VA: BigInt): BigInt = 0
+  override def PTEToPA(PTE: BigInt): BigInt = 0
+  override def SetPTE(PA: BigInt, mods: BigInt): BigInt = 0
+}
+
+object Bare32 extends Bare{
+  override def gen(x: BigInt) = new Int32(x)
+  override def VALowerCeil: BigInt = BigInt("100000000", 16)
+  override def VAUpperFloor: BigInt = BigInt("100000000", 16)
+  override def MaxPhyRange: BigInt = BigInt("100000000", 16)
 }

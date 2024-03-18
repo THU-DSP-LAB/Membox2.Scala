@@ -9,6 +9,8 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
   val pmm = new PhysicalMemory(max_range, SV)
 
   def createRootPageTable(): BigInt = {
+    if(SV.PageLevels == 0)
+      return 0
     val (flag, root) = pmm.findUsable(SV.PageSize)
     if(flag)
       pmm.insertBlock(new Block(root, SV.PageSize))
@@ -16,6 +18,10 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
   }
 
   def allocateMemory(root: BigInt, vaddr: BigInt, size: Int): BigInt = {
+    if(SV.PageLevels == 0) {
+      pmm.insertBlock(new Block(vaddr, size, true))
+      return vaddr
+    }
     val realsize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
     val (flag, paddr) = pmm.findUsable(realsize)
     if(!flag || !pmm.insertBlock(new Block(paddr, size, true)))
@@ -56,15 +62,23 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     return paddr
   }
   def addrConvert(root: BigInt, vaddr: BigInt): BigInt = {
+    if(SV.PageLevels == 0) {
+      if(!pmm.blocks.exists(_ == vaddr))
+        return 0
+      return vaddr
+    }
     var pt_addr = root
     for(level <- 0 until SV.PageLevels){
-      val tmp = SV.PTEToPA(pmm.readWord(pt_addr + SV.VAExtract(vaddr, level) * wordSize)._2.toBigInt)
-      if(tmp == 0) return 0
+      val pte = pmm.readWord(pt_addr + SV.VAExtract(vaddr, level) * wordSize)._2.toBigInt
+      val tmp = SV.PTEToPA(pte)
+      if(tmp == 0 || (pte & SV.V) == 0) return 0
       pt_addr = tmp
     }
     pt_addr | (vaddr & BigInt("0fff", 16))
   }
   def readDataVirtual(root: BigInt, vaddr: BigInt, size: Int): (Boolean, Array[Byte]) = {
+    if(SV.PageLevels == 0)
+      return pmm.readData(vaddr, size)
     var vpn: BigInt = 0; var len: Int = 0
     var out: Array[Byte] = Array.empty
     var paddr = addrConvert(root, vaddr)
@@ -88,13 +102,13 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
   }
   def readWordPhysical(paddr: BigInt) = pmm.readWord(paddr)
   def readWordsPhysical(paddr: BigInt, num: Int, mask: Array[Boolean]) = pmm.readWords(paddr, num, mask)
-  def writeDataVirtual(root: BigInt, vaddr: BigInt, size: Int, in: Array[Byte]): Boolean = {
+  def writeDataVirtual(root: BigInt, vaddr: BigInt, size: Int, in: Array[Byte], mask: Array[Boolean] = Array.empty): Boolean = {
     var vpn: BigInt = 0; var len: Int = 0
     var paddr = addrConvert(root, vaddr)
     for(it <- 0 until size){
       if(vpn != SV.getVPN(vaddr + it)){
         if(len > 0){
-          pmm.writeData(paddr, len, in.slice(it - len, it))
+          pmm.writeData(paddr, len, in.slice(it - len, it), mask.slice(it - len, it))
           paddr = addrConvert(root, vaddr + it)
         }
         len = 0
@@ -103,13 +117,27 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
       if(paddr == 0) return false
       len += 1
     }
-    pmm.writeData(paddr, len, in.slice(size - len, size))
+    pmm.writeData(paddr, len, in.slice(size - len, size), mask.slice(size - len, size))
     true
   }
-  def writeDataPhysical(paddr: BigInt, size: Int, in: Array[Byte]): Boolean = pmm.writeData(paddr, size, in)
+  def writeDataPhysical(paddr: BigInt, size: Int, in: Array[Byte], mask: Array[Boolean] = Array.empty): Boolean = pmm.writeData(paddr, size, in, mask)
   def writeWordPhysical[T1 <: CustomInt](paddr: BigInt, in: T1): Boolean = pmm.writeWord[T1](paddr, in)
   def writeWordsPhysical[T1 <: CustomInt](paddr: BigInt, num: Int, in: Array[T1], mask: Array[Boolean]): Boolean = pmm.writeWords[T1](paddr, num, in, mask)
+
+  def tryAllocate(root: BigInt, vaddr: BigInt, size: Int): Boolean = {
+    val lower = vaddr - vaddr % SV.PageSize
+    val upper = ((vaddr + size + SV.PageSize - 1) / SV.PageSize) * SV.PageSize
+    (lower until upper by SV.PageSize).foreach{ page =>
+      if(addrConvert(root, page) == 0)
+        allocateMemory(root, page, SV.PageSize)
+    }
+    true
+  }
+
   def releaseMemory(root: BigInt, vaddr: BigInt): Boolean = {
+    if(SV.PageLevels == 0){
+      return pmm.removeBlock(vaddr)
+    }
     var paddr = addrConvert(root, vaddr)
     val size = pmm.blocks.find(b => b == paddr) match {
       case Some(b) => b.size
@@ -133,6 +161,8 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     return true
   }
   def cleanPageTable(root: BigInt): Boolean = {
+    if(SV.PageLevels == 0)
+      return true
     val pt_addr = scala.collection.mutable.Seq.fill(SV.PageLevels)(BigInt(0)); pt_addr(0) = root
 
     def cleanLevel(level: Int): Boolean = {
@@ -166,6 +196,8 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     cleanLevel(0)
   }
   def cleanTask(root: BigInt): Boolean = {
+    if(SV.PageLevels == 0)
+      return true
     val pt_addr = scala.collection.mutable.Seq.fill(SV.PageLevels)(BigInt(0)); pt_addr(0) = root
 
     def cleanLevel(level: Int): Boolean = {

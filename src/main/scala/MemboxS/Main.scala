@@ -15,9 +15,9 @@ object SimpleTest extends App{
   var y = ByteArray2BigInt(mem.readDataVirtual(root, BigInt("4000000004", 16), 4)._2)
   print(f"${y}%016x\n")
 
-  mem.allocateMemory(root, BigInt("2000000000", 16), SV39.PageSize * 8)
-  mem.writeDataVirtual(root, BigInt("2000000000", 16), 16, x)
-  y = ByteArray2BigInt(mem.readDataVirtual(root, BigInt("2000000008", 16), 4)._2)
+  mem.allocateMemory(root, BigInt("4000010000", 16), SV39.PageSize * 8)
+  mem.writeDataVirtual(root, BigInt("4000010000", 16), 16, x)
+  y = ByteArray2BigInt(mem.readDataVirtual(root, BigInt("4000010008", 16), 4)._2)
   print(f"${y}%016x\n")
 
   mem.releaseMemory(root, BigInt("4000000000", 16))
