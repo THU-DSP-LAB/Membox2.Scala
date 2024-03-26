@@ -24,7 +24,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     }
     val realsize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
     val (flag, paddr) = pmm.findUsable(realsize)
-    if(!flag || !pmm.insertBlock(new Block(paddr, size, true)))
+    if(!flag || !pmm.insertBlock(new Block(paddr, realsize, true)))
       return 0
     var pos: BigInt = 0
     val pt_idx = scala.collection.mutable.Seq.fill[Int](SV.PageLevels)(-1)
