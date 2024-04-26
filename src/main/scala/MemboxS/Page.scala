@@ -26,7 +26,7 @@ class Block(val addr: BigInt, val size: Int, val create_pages: Boolean = true){
       true
     }
     else{
-      pages.data.take(base) ++
+      pages.data = pages.data.take(base) ++
         ((pages.data.slice(base, base+length) zip data.take(length)) zip mask.take(length)).map{ case ((p, d), m) =>
           if(m) d else p
         } ++ pages.data.drop(base + length)
