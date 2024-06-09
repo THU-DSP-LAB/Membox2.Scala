@@ -33,9 +33,25 @@ class Block(val addr: BigInt, val size: Int, val create_pages: Boolean = true){
       true
     }
   }
-  def read(base: Int, length: Int): (Boolean, Array[Byte]) = {
-    if(base + length > size) (false, Array.empty)
-    else (true, pages.data.slice(base, base + length))
+//  def read(base: Int, length: Int): (Boolean, Array[Byte]) = {
+//    if(base + length > size) (false, Array.empty)
+//    else (true, pages.data.slice(base, base + length))
+//  }
+  def read(base: Int, length: Int, spike_info_pc: BigInt = 0, spike_info_vaddr: BigInt = 0): (Boolean, Array[Byte]) = {
+    try {
+      if (base + length > size) (false, Array.empty)
+      else (true, pages.data.slice(base, base + length))
+    } catch {
+      case e: NullPointerException =>
+        println(s"NullPointerException caught: ${e.getMessage}")
+        println(f"Block base address: 0x$addr%x, Block size: 0x$size%x, Pages is null: ${pages == null}")
+        println(f"data offset address: 0x$base%x, data phys address: 0x${addr+base}%x")
+        println(f"spike_info.pc=0x$spike_info_pc%x, spike_info.vaddr=0x$spike_info_vaddr%x")
+        (false, Array.empty)
+      case e: Exception =>
+        println(s"Exception caught: ${e.getMessage}")
+        (false, Array.empty)
+    }
   }
 }
 
@@ -97,7 +113,10 @@ class PhysicalMemory(range: BigInt, val SV: BaseSV) {
     }
   }
 
-  def readData(addr: BigInt, length: Int): (Boolean, Array[Byte]) = {
+  def readData(addr: BigInt, length: Int, spike_info_pc: BigInt = 0, spike_info_vaddr: BigInt = 0): (Boolean, Array[Byte]) = {
+//    if (addr >= 0 && addr < 4096) {
+//      throw new IllegalArgumentException(f"PhysicalMemory.readData: Address out of bounds: addr = 0x$addr%X, length = $length")
+//    }
     val elem = blocks.find(b => addr >= b.addr && addr + length <= b.end)
     elem match {
       case Some(b) => b.read((addr - b.addr).toInt, length)
