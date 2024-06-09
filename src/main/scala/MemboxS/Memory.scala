@@ -97,8 +97,11 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     out = out ++ pmm.readData(paddr, len)._2
     return (true, out)
   }
-  def readDataPhysical(paddr: BigInt, size: Int): (Boolean, Array[Byte]) = {
-    pmm.readData(paddr, size)
+  def readDataPhysical(paddr: BigInt, size: Int, spike_info_pc: BigInt = 0, spike_info_vaddr: BigInt = 0): (Boolean, Array[Byte]) = {
+    // if (paddr >= 0 && paddr < 4096) {
+    //   throw new IllegalArgumentException(f"Memory.readDataPhysical: Address out of bounds: paddr = 0x$paddr%X, size = $size")
+    // }
+    pmm.readData(paddr, size, spike_info_pc, spike_info_vaddr)
   }
   def readWordPhysical(paddr: BigInt) = pmm.readWord(paddr)
   def readWordsPhysical(paddr: BigInt, num: Int, mask: Array[Boolean]) = pmm.readWords(paddr, num, mask)
