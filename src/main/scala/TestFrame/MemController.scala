@@ -1,7 +1,6 @@
 package TestFrame
 
 import chisel3._
-import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.util._
 
 class MemBundle extends Bundle{
