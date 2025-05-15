@@ -86,13 +86,35 @@ class PhysicalMemory(range: BigInt, val SV: BaseSV) {
   }
 
   def writeData(addr: BigInt, length: Int, in: Array[Byte], mask: Array[Boolean] = Array.empty): Boolean = {
-    val elem = blocks.find(b => addr >= b.addr && addr + length <= b.end)
+    // println(f"writeData blocks.find args: addr=0x$addr%X, length=$length")
+    // println(f"Looking for block where: addr >= b.addr && addr + length <= b.end")
+    
+    val elem = blocks.find(b => {
+      val result = addr >= b.addr && addr + length <= b.end
+      // println(f"  Checking block: b.addr=0x${b.addr}%X, b.end=0x${b.end}%X, result=$result")
+      result
+    })
+    
     elem match {
       case Some(b) => {
         b.write((addr - b.addr).toInt, length, in, mask)
+        // // 添加打印语句来观察数据写入
+        // println(f"writeData called: addr=0x$addr%X, length=$length, data=${in.map(byt => f"$byt%02x").mkString(" ")}, mask=${mask.mkString(",")}")
+        
+        // // 验证数据是否真正写入，通过读取刚刚写入的内容
+        // val (success, verificationData) = readData(addr, length)
+        // if(success) {
+        //   println(f"Data verification - Read after write at addr=0x$addr%X: ${verificationData.map(byt => f"$byt%02x").mkString(" ")}")
+        // } else {
+        //   println(f"Failed to verify data at addr=0x$addr%X after write")
+        // }
+        
         true
       }
-      case None => false
+      case None => {
+        // println(f"No suitable block found for addr=0x$addr%X, length=$length")
+        false
+      }
     }
   }
 
@@ -117,10 +139,28 @@ class PhysicalMemory(range: BigInt, val SV: BaseSV) {
 //    if (addr >= 0 && addr < 4096) {
 //      throw new IllegalArgumentException(f"PhysicalMemory.readData: Address out of bounds: addr = 0x$addr%X, length = $length")
 //    }
-    val elem = blocks.find(b => addr >= b.addr && addr + length <= b.end)
+    // println(f"readData blocks.find args: addr=0x$addr%X, length=$length")
+    // println(f"Looking for block where: addr >= b.addr && addr + length <= b.end")
+    
+    val elem = blocks.find(b => {
+      val result = addr >= b.addr && addr + length <= b.end
+      // println(f"  Checking block: b.addr=0x${b.addr}%X, b.end=0x${b.end}%X, result=$result")
+      result
+    })
     elem match {
-      case Some(b) => b.read((addr - b.addr).toInt, length)
-      case None => (false, Array.empty)
+      case Some(b) =>{
+        val result = b.read((addr - b.addr).toInt, length, spike_info_pc, spike_info_vaddr)
+        // println(f"the result of read_state is $result")
+        // if(result._1) {
+        //   println(f"Data read from addr=0x$addr%X: ${result._2.map(byt => f"$byt%02x").mkString(" ")}")
+        // } else {
+        //   println(f"Failed to read data from addr=0x$addr%X")
+        // }
+        result
+      }
+      case None => 
+        // println("No block found for the given address range.")
+        (false, Array.empty)
     }
   }
 

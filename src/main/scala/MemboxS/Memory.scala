@@ -1,6 +1,7 @@
 package MemboxS
 
 import scala.language.implicitConversions
+import scala.tools.nsc.doc.html.HtmlTags.P
 
 class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
   implicit def fct(x: BigInt): CustomInt = SV.gen(x)
@@ -19,13 +20,17 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
 
   def allocateMemory(root: BigInt, vaddr: BigInt, size: Int): BigInt = {
     if(SV.PageLevels == 0) {
-      pmm.insertBlock(new Block(vaddr, size, true))
+      // 对 size 进行页对齐
+      val alignedSize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
+      pmm.insertBlock(new Block(vaddr, alignedSize, true))
+      println(f"[Memory Allocation] Virtual Address: 0x${vaddr}%X (Paging disabled, no translation. Size: ${alignedSize} bytes, Page Aligned)")
       return vaddr
     }
     val realsize = (size + SV.PageSize - 1) / SV.PageSize * SV.PageSize
     val (flag, paddr) = pmm.findUsable(realsize)
     if(!flag || !pmm.insertBlock(new Block(paddr, realsize, true)))
       return 0
+    println(f"[Memory Allocation] Total Allocation Size: ${realsize} bytes (Aligned to page size)")
     var pos: BigInt = 0
     val pt_idx = scala.collection.mutable.Seq.fill[Int](SV.PageLevels)(-1)
     val pt_addr = scala.collection.mutable.Seq[BigInt](root, 0, 0)
@@ -41,6 +46,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
               case l if (l == SV.PageLevels - 1) => {
                 val pt_entry_tmp = SV.SetPTE(paddr + pos, SV.R|SV.W|SV.X|SV.V)
                 pmm.writeWord(pt_addr(level) + pt_idx(level) * wordSize, fct(pt_entry_tmp))
+                println(f"[Memory Mapping] Virtual Address: 0x${vaddr + pos}%X -> Physical Address: 0x${paddr + pos}%X (Page Size: ${SV.PageSize} bytes)")
               }
               case _ => {
                 val pt_addr_tmp = pmm.findUsable(SV.PageSize)
@@ -101,6 +107,7 @@ class Memory[T <: BaseSV](max_range: BigInt, SV: T) {
     // if (paddr >= 0 && paddr < 4096) {
     //   throw new IllegalArgumentException(f"Memory.readDataPhysical: Address out of bounds: paddr = 0x$paddr%X, size = $size")
     // }
+    // println("success in entering readDataPhysical")
     pmm.readData(paddr, size, spike_info_pc, spike_info_vaddr)
   }
   def readWordPhysical(paddr: BigInt) = pmm.readWord(paddr)
